@@ -2,9 +2,8 @@ name: Daily IT Trend Notifier (Gmail)
 
 on:
   schedule:
-    # 매일 UTC 00:00 (한국 시간 KST 오전 09:00) 실행
-    # - cron: '0 0 * * *'
-    - cron: '20 10 * * *' # UTC 10:00 = KST 19:00 (한국시간 저녁 7시)
+    # UTC 10:20 = KST 19:20 (한국시간 저녁 7시 20분)
+    - cron: '25 10 * * *'
   # GitHub 웹 화면에서 수동으로 실행 테스트 가능
   workflow_dispatch:
 
@@ -13,15 +12,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 기존: actions/checkout@v4 -> 최신 버전(v5 이상 또는 최신 태그)으로 변경
       - name: Check out repository
         uses: actions/checkout@v5  # 또는 @main
 
-      # 기존: actions/setup-python@v5 -> 최신 버전(v6 이상 또는 최신 태그)으로 변경
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.10'
+          python-version: '3.11' # 최신 라이브러리와의 호환성을 위해 3.11 권장
 
       - name: 패키지 설치
         run: |
