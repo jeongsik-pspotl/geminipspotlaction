@@ -2,7 +2,7 @@ import os
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import google.generativeai as genai
+from google import genai
 
 # 1. 환경변수 로드
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -12,13 +12,17 @@ TO_EMAIL = os.environ.get("TO_EMAIL")              # 수신용 이메일 주소
 
 def generate_trend_report():
     """Gemini API를 활용해 IT 트렌드 요약 생성"""
-    genai.configure(api_key=GEMINI_API_KEY)
+    api_key = os.environ.get("GEMINI_API_KEY")
+    client = genai.Client(api_key=api_key)
     model = genai.GenerativeModel("gemini-1.5-flash")
 
-    prompt = (
-        "클라우드(Cloud), AI/ML, Spring Boot, Redis 분야의 "
-        "오늘 주요 IT 소식과 핵심 기술 트렌드를 읽기 쉬운 요약 리포트 형태로 작성해줘."
-    )
+    prompt = "클라우드(Cloud), AI/ML, Spring Boot, Redis 분야의 오늘 주요 IT 소식과 핵심 기술 트렌드를 읽기 쉬운 요약 리포트 형태로 작성해줘."
+
+    # 최신 지원 모델(gemini-2.5-flash) 적용
+    response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+            )
 
     response = model.generate_content(prompt)
     return response.text
