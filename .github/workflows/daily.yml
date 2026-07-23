@@ -13,11 +13,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 코드 체크아웃
-        uses: actions/checkout@v4
+      # 기존: actions/checkout@v4 -> 최신 버전(v5 이상 또는 최신 태그)으로 변경
+      - name: Check out repository
+        uses: actions/checkout@v5  # 또는 @main
 
-      - name: Python 환경 설정
-        uses: actions/setup-python@v5
+      # 기존: actions/setup-python@v5 -> 최신 버전(v6 이상 또는 최신 태그)으로 변경
+      - name: Set up Python
+        uses: actions/setup-python@v6
         with:
           python-version: '3.10'
 
