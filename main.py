@@ -39,7 +39,7 @@ def generate_trend_report():
       except Exception as e:
         print(f"시도 {attempt+1} 실패: {e}")
         if attempt < max_retries - 1:
-          time.sleep(5)  너지 5초 대기 후 재시도
+          time.sleep(5)  #너지 5초 대기 후 재시도
         else:
           raise e
     
