@@ -1,6 +1,8 @@
 import os
 import smtplib
 import httpx
+import time
+from google.genai.errors import APIError
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from google import genai
@@ -14,7 +16,7 @@ TO_EMAIL = os.environ.get("TO_EMAIL")              # 수신용 이메일 주소
 def generate_trend_report():
     """Gemini API를 활용해 IT 트렌드 요약 생성"""
     api_key = os.environ.get("GEMINI_API_KEY")
-    client = genai.Client(api_key=api_key)
+    # client = genai.Client(api_key=api_key)
 
     prompt = "클라우드(Cloud), AI/ML, Spring Boot, Redis 분야의 오늘 주요 IT 소식과 핵심 기술 트렌드를 읽기 쉬운 요약 리포트 형태로 작성해줘."
 
@@ -25,6 +27,21 @@ def generate_trend_report():
                 "timeout": 120.0
             },  # 2분 동안 응답 대기 허용
     )
+
+    max_retries = 3
+    for attempt in range(max_retries):
+      try:
+        response = client.models.generate_content(
+            model="gemini-3.8-flash",  # 또는 최신 모델명
+            contents=prompt,
+        )
+        break
+      except Exception as e:
+        print(f"시도 {attempt+1} 실패: {e}")
+        if attempt < max_retries - 1:
+          time.sleep(5)  너지 5초 대기 후 재시도
+        else:
+          raise e
     
     # response = client.models.generate_content(
     #         model='gemini-2.5-flash',
