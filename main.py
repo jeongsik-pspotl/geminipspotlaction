@@ -1,5 +1,6 @@
 import os
 import smtplib
+import httpx
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from google import genai
@@ -18,9 +19,11 @@ def generate_trend_report():
     prompt = "클라우드(Cloud), AI/ML, Spring Boot, Redis 분야의 오늘 주요 IT 소식과 핵심 기술 트렌드를 읽기 쉬운 요약 리포트 형태로 작성해줘."
 
     # 최신 지원 모델(gemini-2.5-flash) 적용
-    response = client.models.generate_content(
-      model='gemini-3.8-flash',  # 최신 플래시 모델
-      contents=prompt,
+    client = genai.Client(
+            api_key=os.environ["GEMINI_API_KEY"],
+            http_options={
+                "timeout": 120.0
+            },  # 2분 동안 응답 대기 허용
     )
     
     # response = client.models.generate_content(
