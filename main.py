@@ -4,7 +4,7 @@ import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from google import genai
-from google.genai.errors import APIError
+from google.genai import types  # HttpOptions 타입을 위해 추가
 
 # 1. 환경변수 로드
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -15,14 +15,12 @@ TO_EMAIL = os.environ.get("TO_EMAIL")  # 수신용 이메일 주소
 
 def generate_trend_report():
   """Gemini API를 활용해 IT 트렌드 요약 생성"""
+  # 최신 SDK 규격에 맞춰 밀리초(ms) 단위로 타임아웃 설정 (120초 = 120000ms)
   client = genai.Client(
       api_key=GEMINI_API_KEY,
-      http_options={
-          "timeout": 120.0
-      },  # 2분 동안 넉넉하게 응답 대기 허용
+      http_options=types.HttpOptions(timeout=120000),
   )
 
-  # 타임아웃 방지를 위해 명확하고 구조화된 프롬프트 작성
   prompt = (
       "클라우드(Cloud), AI/ML, Spring Boot, Redis 분야의 핵심 기술 트렌드와"
       " 백엔드 아키텍처 모범 사례를 3가지 주제로 나누어 읽기 쉬운 요약"
@@ -34,7 +32,7 @@ def generate_trend_report():
     try:
       print(f"Gemini API 호출 시도 {attempt + 1}/{max_retries}...")
       response = client.models.generate_content(
-          model="gemini-2.5-flash",  # 안정적인 정식 플래시 모델 사용
+          model="gemini-3.8-flash",  # API가 권장하는 최신 정식 모델 적용
           contents=prompt,
       )
       if response and response.text:
