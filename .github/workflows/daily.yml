@@ -3,7 +3,7 @@ name: Daily IT Trend Notifier (Gmail)
 on:
   schedule:
   # 매일 UTC 13:05 (한국 시간 KST 밤 10:05) 실행
-    - cron: '28 13 * * *'
+    - cron: '30 13 * * *'
   # GitHub 웹 화면에서 수동으로 실행 테스트 가능
   workflow_dispatch:
 
