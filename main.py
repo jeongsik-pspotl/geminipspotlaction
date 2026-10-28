@@ -19,9 +19,14 @@ def generate_trend_report():
 
     # 최신 지원 모델(gemini-2.5-flash) 적용
     response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-            )
+      model='gemini-3.8-flash',  # 최신 플래시 모델
+      contents=prompt,
+    )
+    
+    # response = client.models.generate_content(
+    #         model='gemini-2.5-flash',
+    #         contents=prompt,
+    #         )
 
     return response.text
 
