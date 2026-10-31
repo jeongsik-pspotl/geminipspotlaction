@@ -1,31 +1,33 @@
-name: Daily IT Trend Notifier (Gmail)
+name: AI Agent Auto-Commit & Push Pipeline
 
 on:
   schedule:
-  # 매일 UTC 13:05 (한국 시간 KST 밤 10:05) 실행
+    # 매일 한국 시간(KST) 밤 10시 5분 (UTC 13:05) 실행
     - cron: '5 13 * * *'
-  # GitHub 웹 화면에서 수동으로 실행 테스트 가능
   workflow_dispatch:
 
+permissions:
+  contents: write  # 💡 [필수] GitHub Actions가 레포지토리에 쓰기(Push) 권한 부여
+
 jobs:
-  notify:
-    runs-on: ubuntu-latest
+  run-agent:
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v5  # 또는 @main
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11' # 최신 라이브러리와의 호환성을 위해 3.11 권장
+          python-version: '3.11'
 
-      - name: 패키지 설치
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: 스크립트 실행 및 Gmail 발송
+      - name: Run Python Script (Generate Report & File)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
@@ -33,3 +35,22 @@ jobs:
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
         run: |
           python main.py
+
+      - name: Commit and Push Generated Files
+        run: |
+          # GitHub Actions 공식 봇 메타데이터 설정 (추천)
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          # 변경된 파일 확인
+          git status
+          git add docs/
+          
+          # 변경 사항이 있을 때만 커밋 및 푸시 수행
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            # [skip ci]를 붙여 이 커밋으로 인해 워크플로우가 다시 무한 실행되는 것을 방지
+            git commit -m "docs: auto-generate daily AI trend report [skip ci]"
+            git push
+          fi

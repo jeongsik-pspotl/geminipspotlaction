@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 import re
 import smtplib
@@ -39,7 +40,6 @@ def wait_for_model_health(client, max_attempts=5):
 
     for attempt in range(1, max_attempts + 1):
         try:
-            # 가벼운 텍스트로 모델 응답 가능 여부 테스트
             response = client.models.generate_content(
                 model="gemini-3.8-flash",
                 contents="ping",
@@ -49,10 +49,10 @@ def wait_for_model_health(client, max_attempts=5):
                 return True
         except Exception as e:
             print(
-                f"⚠️ 모델 과부하 또는 응답 지연 감지 (시도 {attempt}/{max_attempts}): {e}"
+                f"⚠️ 모델 과부하 또는 응답 지연 감지 (시도"
+                f" {attempt}/{max_attempts}): {e}"
             )
             if attempt < max_attempts:
-                # 시도가 거듭될수록 대기 시간 증가 (15초, 30초, 45초...)
                 wait_sec = attempt * 15
                 print(f"⏳ {wait_sec}초 동안 대기 후 모델 상태를 다시 확인합니다...")
                 time.sleep(wait_sec)
@@ -62,20 +62,37 @@ def wait_for_model_health(client, max_attempts=5):
     return False
 
 
-def generate_trend_report(client):
-    """Gemini API를 활용해 IT 트렌드 요약 생성"""
+def generate_trend_report(client, max_retries=3):
+    """간결한 프롬프트, 504 타임아웃 대응 재시도 로직이 포함된 리포트 생성"""
+    # 💡 [개선] 프롬프트를 핵심 위주로 간결하게 다듬어 504 에러 가능성을 대폭 낮춤
     prompt = (
-        "클라우드(Cloud), AI/ML, Spring Boot, Redis 분야의 핵심 기술 트렌드와"
-        " 백엔드 아키텍처 모범 사례를 3가지 주제로 나누어 읽기 쉬운 요약"
-        " 리포트 형태로 한국어로 작성해줘."
+        "클라우드, AI/ML, Spring Boot, Redis 핵심 기술 트렌드와 백엔드"
+        " 아키텍처 모범 사례를 3가지 요점으로 나누어 한국어로 간결하고 명확하게"
+        " 작성해줘."
     )
 
-    response = client.models.generate_content(
-        model="gemini-3.8-flash",
-        contents=prompt,
-    )
-    if response and response.text:
-        return clean_text_robust(response.text)
+    for attempt in range(1, max_retries + 1):
+        try:
+            print(f"📊 IT 트렌드 리포트 생성 시도 {attempt}/{max_retries}...")
+            response = client.models.generate_content(
+                model="gemini-3.8-flash",
+                contents=prompt,
+            )
+            if response and response.text:
+                return clean_text_robust(response.text)
+        except Exception as e:
+            print(
+                f"⚠️ 리포트 생성 중 타임아웃/에러 발생 (시도"
+                f" {attempt}/{max_retries}): {e}"
+            )
+            if attempt < max_retries:
+                wait_sec = attempt * 10  # 10초, 20초 간격으로 대기 시간 증가
+                print(f"⏳ {wait_sec}초 대기 후 리포트 생성을 재시도합니다...")
+                time.sleep(wait_sec)
+            else:
+                raise Exception(
+                    "모든 리포트 생성 시도가 실패했습니다 (DEADLINE_EXCEEDED)."
+                )
 
     raise Exception("리포트 생성 내용이 비어 있습니다.")
 
@@ -103,17 +120,18 @@ def send_gmail_message(subject, content):
 if __name__ == "__main__":
     print("🚀 IT 트렌드 자동화 파이프라인 시작...")
 
+    # 💡 [개선] 타임아웃을 180초(180000ms)로 넉넉하게 확장하여 대형 응답 허용
     client = genai.Client(
         api_key=GEMINI_API_KEY,
-        http_options=types.HttpOptions(timeout=120000),  # 2분 타임아웃 설정
+        http_options=types.HttpOptions(timeout=180000),
     )
 
-    # 1단계: 모델이 정상 상태가 될 때까지 대기 (Health Check)
+    # 1단계: 모델 헬스체크
     if not wait_for_model_health(client):
         print("💡 서버 과부하로 인해 이번 실행을 안전하게 종료합니다.")
-        exit(0)  # 에러 코드가 아닌 0으로 종료하여 GitHub Actions 빨간불(실패) 방지
+        exit(0)
 
-    # 2단계: 본격적인 IT 트렌드 리포트 생성
+    # 2단계: 재시도 및 간결한 프롬프트가 적용된 리포트 생성
     print("📊 IT 트렌드 리포트 생성 중...")
     try:
         report = generate_trend_report(client)
@@ -129,3 +147,18 @@ if __name__ == "__main__":
     else:
         print("❌ 이메일 발송에 실패했습니다.")
         exit(1)
+
+    # 4단계: 레포지토리 자동 반영을 위한 Markdown 파일 저장 (GitOps 연동)
+    print("📝 레포지토리 반영을 위한 마크다운 파일 생성 중...")
+    os.makedirs("docs", exist_ok=True)
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    file_path = f"docs/trend-report-{today_str}.md"
+
+    markdown_content = (
+        f"# [Daily IT Tech Trend Briefing - {today_str}]\n\n{report}"
+    )
+
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(markdown_content)
+
+    print(f"📁 파일 생성 완료: {file_path}")
