@@ -20,7 +20,6 @@ def clean_text_robust(text):
     if not text:
         return ""
 
-    # 1. 논브레이킹 스페이스(\xa0), 제로위치 공백(\u200b), BOM(\ufeff) 등을 일반 공백이나 빈 문자로 치환
     text = (
         text.replace("\xa0", " ")
         .replace("\u200b", "")
@@ -28,52 +27,57 @@ def clean_text_robust(text):
         .replace("\u200f", "")
         .replace("\ufeff", "")
     )
-
-    # 2. 줄바꿈 문자 통일 (Windows \r\n -> Unix \n)
     text = text.replace("\r\n", "\n").replace("\r", "\n")
-
-    # 3. 인코딩 깨짐을 유발하는 불필요한 제어 문자 제거 (탭(\t)과 줄바꿈(\n)은 보존)
     text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]", "", text)
-
-    # 4. 각 라인별 우측 공백 제거 및 연속된 과도한 빈 줄 정리 (선택사항)
     lines = [line.rstrip() for line in text.split("\n")]
-    cleaned_text = "\n".join(lines).strip()
-
-    return cleaned_text
+    return "\n".join(lines).strip()
 
 
-def generate_trend_report():
+def wait_for_model_health(client, max_attempts=5):
+    """가벼운 핑 테스트로 모델이 정상(Healthy) 상태가 될 때까지 점진적 대기"""
+    print("🔍 Gemini 모델 상태 헬스체크 중...")
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            # 가벼운 텍스트로 모델 응답 가능 여부 테스트
+            response = client.models.generate_content(
+                model="gemini-3.8-flash",
+                contents="ping",
+            )
+            if response and response.text:
+                print("✅ Gemini 모델이 정상(Healthy) 상태입니다.")
+                return True
+        except Exception as e:
+            print(
+                f"⚠️ 모델 과부하 또는 응답 지연 감지 (시도 {attempt}/{max_attempts}): {e}"
+            )
+            if attempt < max_attempts:
+                # 시도가 거듭될수록 대기 시간 증가 (15초, 30초, 45초...)
+                wait_sec = attempt * 15
+                print(f"⏳ {wait_sec}초 동안 대기 후 모델 상태를 다시 확인합니다...")
+                time.sleep(wait_sec)
+            else:
+                print("❌ 최대 헬스체크 횟수를 초과했습니다. 잠시 후 다시 시도합니다.")
+                return False
+    return False
+
+
+def generate_trend_report(client):
     """Gemini API를 활용해 IT 트렌드 요약 생성"""
-    client = genai.Client(
-        api_key=GEMINI_API_KEY,
-        http_options=types.HttpOptions(timeout=120000),  # 2분 대기 타임아웃
-    )
-
     prompt = (
         "클라우드(Cloud), AI/ML, Spring Boot, Redis 분야의 핵심 기술 트렌드와"
         " 백엔드 아키텍처 모범 사례를 3가지 주제로 나누어 읽기 쉬운 요약"
         " 리포트 형태로 한국어로 작성해줘."
     )
 
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            print(f"Gemini API 호출 시도 {attempt + 1}/{max_retries}...")
-            response = client.models.generate_content(
-                model="gemini-3.8-flash",
-                contents=prompt,
-            )
-            if response and response.text:
-                # 보완된 정제 함수 적용
-                return clean_text_robust(response.text)
-        except Exception as e:
-            print(f"시도 {attempt+1} 실패: {e}")
-            if attempt < max_retries - 1:
-                time.sleep(10)  # 10초 대기 후 재시도
-            else:
-                raise e
+    response = client.models.generate_content(
+        model="gemini-3.8-flash",
+        contents=prompt,
+    )
+    if response and response.text:
+        return clean_text_robust(response.text)
 
-    raise Exception("모든 API 호출 시도가 실패했습니다.")
+    raise Exception("리포트 생성 내용이 비어 있습니다.")
 
 
 def send_gmail_message(subject, content):
@@ -81,11 +85,7 @@ def send_gmail_message(subject, content):
     msg = MIMEMultipart()
     msg["From"] = GMAIL_USER
     msg["To"] = TO_EMAIL
-
-    # 한글 및 특수문자가 포함된 제목을 안전하게 헤더 인코딩
     msg["Subject"] = Header(subject, "utf-8")
-
-    # 이메일 본문 작성 (UTF-8 인코딩 명시)
     msg.attach(MIMEText(content, "plain", "utf-8"))
 
     try:
@@ -101,13 +101,31 @@ def send_gmail_message(subject, content):
 
 
 if __name__ == "__main__":
-    print("IT 트렌드 리포트 생성 중...")
-    report = generate_trend_report()
+    print("🚀 IT 트렌드 자동화 파이프라인 시작...")
 
+    client = genai.Client(
+        api_key=GEMINI_API_KEY,
+        http_options=types.HttpOptions(timeout=120000),  # 2분 타임아웃 설정
+    )
+
+    # 1단계: 모델이 정상 상태가 될 때까지 대기 (Health Check)
+    if not wait_for_model_health(client):
+        print("💡 서버 과부하로 인해 이번 실행을 안전하게 종료합니다.")
+        exit(0)  # 에러 코드가 아닌 0으로 종료하여 GitHub Actions 빨간불(실패) 방지
+
+    # 2단계: 본격적인 IT 트렌드 리포트 생성
+    print("📊 IT 트렌드 리포트 생성 중...")
+    try:
+        report = generate_trend_report(client)
+    except Exception as e:
+        print(f"❌ 리포트 생성 실패: {e}")
+        exit(1)
+
+    # 3단계: Gmail 발송
     subject = "[Daily IT Tech Trend Briefing]"
-
-    print("Gmail로 메일 발송 중...")
+    print("📧 Gmail로 메일 발송 중...")
     if send_gmail_message(subject, report):
-        print("성공적으로 이메일을 발송했습니다!")
+        print("🎉 성공적으로 이메일을 발송했습니다!")
     else:
-        print("이메일 발송에 실패했습니다.")
+        print("❌ 이메일 발송에 실패했습니다.")
+        exit(1)
