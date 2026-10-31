@@ -1,26 +1,27 @@
 # 🚀 Daily AI-Powered IT Trend Notifier & Automation Pipeline
 
-> **GitHub Actions와 Google Gemini API를 연동하여 매일 최신 IT 기술 트렌드를 자동으로 수집·정제하고, Gmail로 브리핑 리포트를 발송하는 무중단 백엔드 자동화 파이프라인 프로젝트입니다.**
+> **GitHub Actions와 Google Gemini API를 연동하여 매일 최신 IT 기술 트렌드를 자동으로 수집·정제하고, Gmail로 브리핑 리포트를 발송하며 저장소에 마크다운 문서를 자동 반영(GitOps)하는 무중단 백엔드 자동화 파이프라인 프로젝트입니다.**
 
 ---
 
-## 📊 프로젝트 완성률 (Completion Rate: **95%**)
+## 📊 프로젝트 완성률 (Completion Rate: **100%**)
 
 - [x] **Core Logic:** Gemini API 연동 및 맞춤형 프롬프트 설계 (100%)
-- [x] **Fault Tolerance & Resilience:** 서버 과부하(`503`/`504`) 대응 헬스체크 및 백오프 대기 로직 (100%)
+- [x] **Fault Tolerance & Resilience:** 서버 과부하(`503`/`504`) 대응 헬스체크, 타임아웃 확장(180s) 및 백오프 재시도 로직 (100%)
 - [x] **Text Sanitization:** 특수 공백(`\xa0`) 및 제어 문자 정제 파이프라인 (100%)
 - [x] **Delivery System:** Gmail SMTP 연동 및 UTF-8 헤더 인코딩 (100%)
 - [x] **CI/CD Automation:** GitHub Actions 크론 스케줄링 (KST 기준 매일 밤 10시 5분) 구축 (100%)
-- [ ] **Extension:** 생성된 리포트를 GitHub 저장소 내 Markdown(`.md`) 파일로 자동 커밋 및 푸시 기능 추가 (진행 중)
+- [x] **GitOps Integration:** 생성된 리포트를 저장소 내 `docs/` 마크다운(`.md`) 파일로 자동 생성 및 커밋/푸시 파이프라인 완성 (100%)
 
 ---
 
 ## 1. 프로젝트 정의 및 목표 (Project Definition)
 
-* **목표:** 백엔드 엔지니어의 실무 역량 강화를 위한 자율형 에이전트 및 자동화 파이프라인 구축. 수동으로 찾아보기 번거로운 **Cloud, AI/ML, Spring Boot, Redis** 등 핵심 기술 트렌드를 AI가 매일 요약하여 개인 메일함으로 자동 배달합니다.
+* **목표:** 백엔드 엔지니어의 실무 역량 강화를 위한 자율형 에이전트 및 자동화 파이프라인 구축. 수동으로 찾아보기 번거로운 **Spring Boot, Cloud, AI/ML** 등 핵심 백엔드 기술 트렌드를 AI가 매일 요약하여 개인 메일함과 저장소 문서로 자동 배달 및 저장합니다.
 * **핵심 가치:**
     * 외부 API 연동 시 발생할 수 있는 네트워크 지연 및 서버 과부하 상황을 프로그래밍적으로 방어하는 **견고한 예외 처리(Resilience)** 구현.
     * 퍼블릭(Public) 저장소 공개 시 민감 정보 유출을 원천 차단하는 **보안 아키텍처** 적용.
+    * AI 응답 결과를 저장소 버전 관리에 자동 등록하는 **GitOps 파이프라인** 구현.
 
 ---
 
@@ -28,10 +29,12 @@
 
 | 구분 | 기능 명칭 | 설명 |
 | :--- | :--- | :--- |
-| **AI Engine** | Gemini API 연동 (`gemini-3.8-flash`) | 최신 모델을 활용해 지정된 IT 기술 스택의 핵심 트렌드 요약 리포트 생성 |
-| **Resilience** | 사전 헬스체크 및 백오프 (`wait_for_model_health`) | 본문 요청 전 `"ping"` 테스트를 수행하여 서버 과부하 감지 시 점진적 대기(15s $\rightarrow$ 30s) 후 실행 |
+| **AI Engine** | Gemini API 연동 (`gemini-3.8-flash`) | 최신 모델을 활용해 핵심 IT 기술 스택 및 백엔드 아키텍처 모범 사례 요약 리포트 생성 |
+| **Resilience** | 사전 헬스체크 및 3분 타임아웃 확장 | 본문 요청 전 `"ping"` 헬스체크 및 `timeout=180000ms` 확장으로 타임아웃 최소화 |
+| **Retry Logic** | 지능형 재시도 로직 (`generate_trend_report`) | `504 DEADLINE_EXCEEDED` 감지 시 백오프 대기(10s $\rightarrow$ 20s) 후 최대 3회 재시도 |
 | **Sanitizer** | 텍스트 정제 파이프라인 (`clean_text_robust`) | 유니코드 특수 공백(`\xa0`, `\u200b` 등) 및 제어 문자를 제거하여 인코딩 에러 예방 |
 | **Delivery** | Gmail SMTP 자동 발송 (`smtplib`) | TLS 보안 연결(Port 587) 및 UTF-8 헤더 인코딩을 통한 안정적인 메일 전송 |
+| **GitOps** | 문서 자동 저장 및 배포 (`docs/`) | 메일 발송 성공 후 `docs/trend-report-YYYY-MM-DD.md`로 자동 저장 및 Git Push 연동 |
 | **CI/CD** | GitHub Actions Cron Automation | 매일 한국 시간(KST) 밤 10시 5분(`5 13 * * *` UTC)에 무인 자동 실행 |
 
 ---
@@ -41,36 +44,29 @@
 파이프라인 구축 과정에서 직면했던 대표적인 장애 요소들과 이를 해결한 엔지니어링 접근 방식입니다.
 
 * **Issue 1: 서버 과부하 및 타임아웃 (`503 UNAVAILABLE` / `504 DEADLINE_EXCEEDED`)**
-    * *원인:* 전 세계 트래픽 피크 시간대에 대형 프롬프트를 전송할 경우 서버가 응답을 주지 못하고 커넥션이 끊기는 현상 발생.
+    * *원인:* 전 세계 트래픽 피크 시간대에 요청 전송 시 서버 응답 지연으로 타임아웃 발생.
     * *해결:*
-        1. HTTP 클라이언트 옵션에 밀리초 단위 타임아웃(`types.HttpOptions(timeout=120000)`)을 넉넉하게 부여.
-        2. 무거운 요청을 보내기 전 가벼운 핑 테스트로 모델 상태를 검증하는 `wait_for_model_health` 함수를 도입하여 서버가 안정화될 때까지 지능적으로 대기하도록 설계.
+        1. HTTP 클라이언트 옵션 타임아웃을 `180000ms`(3분)로 넉넉하게 확장.
+        2. 가벼운 핑 테스트로 모델 상태를 검증하는 `wait_for_model_health` 함수 적용.
+        3. `generate_trend_report` 함수에 `max_retries=3` 재시도 및 대기(Backoff) 로직을 추가하여 회복력(Resilience) 대폭 향상.
 * **Issue 2: SMTP 이메일 발송 시 인코딩 크래시 (`UnicodeEncodeError: 'ascii' codec can't encode character '\xa0'`)**
-    * *원인:* AI가 생성한 텍스트 내부에 눈에 보이지 않는 논브레이킹 스페이스(`\xa0`) 등이 포함되어 있어 파이썬 기본 인코딩(ASCII) 과정에서 예외 발생.
-    * *해결:* 정규식과 문자열 치환 메서드를 결합한 `clean_text_robust` 함수를 구현하여, 메일 전송 직전 모든 제어 문자와 숨은 공백을 완벽하게 정제.
+    * *원인:* AI가 생성한 텍스트 내부에 논브레이킹 스페이스(`\xa0`) 등이 포함되어 ASCII 인코딩 실패.
+    * *해결:* 정규식과 문자열 치환 메서드를 결합한 `clean_text_robust` 함수를 구현하여 모든 제어 문자와 특수 공백을 정제.
 
 ---
 
 ## 4. 실행 결과 예시 (Expected Output Example)
 
-파이프라인이 정상적으로 작동하여 수신된 이메일 브리핑 리포트의 예시 구조입니다.
+파이프라인이 정상적으로 작동하여 수신된 이메일 브리핑 리포트 및 `docs/` 폴더에 생성되는 마크다운 예시입니다.
 
 ```text
 Subject: [Daily IT Tech Trend Briefing]
 
-[Daily IT Tech Trend Briefing - 2026.10.31]
+# [Daily IT Tech Trend Briefing - 2026-10-31]
 
-1. Cloud & Architecture
-- AWS Landing Zone 기반 멀티 아키텍처 재해복구(DR) 자동화 트렌드
-- MSA 환경에서의 분산 트랜잭션 관리와 SAGA 패턴 적용 모범 사례
-
-2. Spring Boot & Backend
-- Spring Boot 3.x 환경에서의 가비지 컬렉션(GC) 성능 최적화 전략
-- Virtual Threads(Project Loom) 도입에 따른 고도화된 I/O 처리 성능 비교
-
-3. AI/ML & Redis Caching
-- 분산 캐시 환경에서 Redis Cluster 장애 대응 및 락(Lock) 안정성 확보 방안
-- 로컬 LLM 프로토타이핑을 위한 M1 Pro 기반 경량화 파이프라인 구축 사례
+1. Spring Boot 3.x 가비지 컬렉션(GC) 성능 최적화 및 Virtual Threads 적용 모범 사례
+2. 분산 환경에서의 Redis 캐싱 전략 및 데이터 일관성 보장 방안
+3. 클라우드 고가용성 아키텍처와 백엔드 서킷 브레이커(Circuit Breaker) 패턴 도입 가이드
 ```
 
 ---
