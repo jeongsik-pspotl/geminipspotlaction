@@ -3,7 +3,7 @@ name: AI Agent Auto-Commit & Push Pipeline
 on:
   schedule:
     # 매일 한국 시간(KST) 밤 10시 5분 (UTC 13:05) 실행
-    - cron: '5 13 * * *'
+    # - cron: '5 13 * * *'
   workflow_dispatch:
 
 permissions:
